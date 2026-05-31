@@ -10,14 +10,10 @@ import json
 import logging
 import asyncio
 import time
-import csv
-import io
 from datetime import datetime
-from urllib.parse import quote_plus
 
 # External Dependencies
 import aiohttp
-from bs4 import BeautifulSoup
 import google.generativeai as genai
 import gspread
 from google.oauth2.service_account import Credentials
@@ -47,11 +43,11 @@ class Config:
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "default-secret-999")
     
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"  # Best-in-class fallback engine
+    GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"
     
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
-    GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")  # Raw service account credentials JSON string
+    GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
     
     RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
     WEBHOOK_PATH = f"/webhook/{WEBHOOK_SECRET}"
@@ -70,7 +66,6 @@ class Config:
 
     @classmethod
     def validate(cls):
-        """Validate crucial system keys before bootup."""
         required = [
             "TELEGRAM_BOT_TOKEN",
             "GEMINI_API_KEY",
@@ -82,10 +77,8 @@ class Config:
             logger.critical(f"[CONFIG] Boot aborted. Missing variables: {', '.join(missing)}")
             sys.exit(1)
         
-        # Write Google Credentials JSON dynamically if provided as environment variable
         if cls.GOOGLE_CREDS_JSON:
             try:
-                # Validate JSON structure
                 json.loads(cls.GOOGLE_CREDS_JSON)
                 with open("google_creds.json", "w") as f:
                     f.write(cls.GOOGLE_CREDS_JSON)
@@ -93,7 +86,7 @@ class Config:
             except Exception as e:
                 logger.error(f"[CONFIG] Failed to write dynamic GOOGLE_CREDS_JSON: {e}")
         else:
-            logger.warning("[CONFIG] GOOGLE_CREDS_JSON env var not set. Sheets sync might fail if file is missing.")
+            logger.warning("[CONFIG] GOOGLE_CREDS_JSON env var not set.")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -104,7 +97,6 @@ def is_authorized(user_id: int) -> bool:
     return user_id == Config.AUTHORIZED_USER_ID
 
 def authorization_check(func):
-    """Decorator ensuring only Ihap can control the operational nodes."""
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.effective_user:
             return
@@ -136,7 +128,6 @@ class GeminiEngine:
             self.model = None
 
     async def analyze_sentiment(self, text: str) -> dict:
-        """Analyze prospect response sentiment."""
         if not self.model:
             return {"raw_response": "Gemini Key Not Set"}
         prompt = (
@@ -157,7 +148,6 @@ class GeminiEngine:
             return {"raw_response": f"Analysis failed: {str(e)}"}
 
     async def process_command_intelligence(self, command: str, data: dict) -> str:
-        """Provide continuous strategic guidance on data milestones."""
         if not self.model:
             return "Intelligence Layer offline. Please add key."
         prompt = (
@@ -173,7 +163,6 @@ class GeminiEngine:
             return f"Strategic analysis bypassed: {str(e)}"
 
     async def generate_outreach_variant(self, niche: str, city: str) -> str:
-        """Synthesize highly customized outreach variants."""
         if not self.model:
             return "No custom variant available."
         prompt = (
@@ -192,7 +181,7 @@ gemini = GeminiEngine()
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 4. GOOGLE SHEETS CONNECTOR (ZERO PANDAS LIGHTWEIGHT PIPELINE)
+# 4. GOOGLE SHEETS CONNECTOR (LIGHTWEIGHT PIPELINE)
 # ─────────────────────────────────────────────────────────────────────
 
 class SheetsConnector:
@@ -206,7 +195,6 @@ class SheetsConnector:
         self.sheet = None
 
     def connect(self):
-        """Lazy load connection to keep bot startup instant."""
         if self.gc:
             return True
         try:
@@ -278,7 +266,6 @@ class SheetsConnector:
         try:
             for ws in self.sheet.worksheets():
                 if ws.title.startswith("Leads_"):
-                    # Fast cell counting without pulling huge data payload
                     values = ws.col_values(1)
                     counts[ws.title] = max(0, len(values) - 1)
         except Exception as e:
@@ -326,7 +313,6 @@ class GooglePlacesScraper:
                             err_text = await resp.text()
                             logger.error(f"[SCRAPER] Error response: {err_text}")
                             break
-                        
                         data = await resp.json()
                 except Exception as e:
                     logger.error(f"[SCRAPER] Call failed: {e}")
@@ -376,8 +362,6 @@ class GooglePlacesScraper:
             return []
         
         processed = self.process_raw_places(raw_results, niche, city)
-        
-        # Async run in executor to prevent blocking
         await asyncio.to_thread(sheets.dump_leads, processed, niche, city)
         return processed
 
@@ -402,7 +386,6 @@ class CampaignEngine:
                 "message": "No lead pools available. Run /scrape first.",
             }
 
-        # Target the freshest worksheet/pool with highest volume
         target_sheet = max(lead_counts, key=lead_counts.get)
         total_leads = lead_counts[target_sheet]
 
@@ -434,7 +417,7 @@ campaign_engine = CampaignEngine()
 
 class Dashboard:
     def __init__(self):
-        self.veto_panel_mode = "ARMED"  # ARMED | PASSIVE | OVERRIDE
+        self.veto_panel_mode = "ARMED"
 
     async def generate_full_status(self) -> str:
         lead_counts = await asyncio.to_thread(sheets.get_lead_count)
@@ -442,7 +425,6 @@ class Dashboard:
         active = campaign_engine.active_campaign
         campaigns_launched = len(campaign_engine.campaign_log)
 
-        # ROI Modeling
         estimated_conversion_rate = 0.03
         avg_deal_value = 2500
         projected_revenue = total_leads * estimated_conversion_rate * avg_deal_value
@@ -452,7 +434,6 @@ class Dashboard:
             "📊 *ABDELLAH VENTURES — MAIN OPERATIONAL PORTAL*\n"
             f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
             f"{'═' * 42}\n\n"
-
             "💰 *ROI TRACKER AND PIPELINE KPI*\n"
             f"  📌 Total Scraped Leads: *{total_leads}*\n"
             f"  🚀 Total Active Campaigns: *{campaigns_launched}*\n"
@@ -462,7 +443,6 @@ class Dashboard:
             f"  🔮 Projected Revenue Flow: *${projected_revenue:,.2f}*\n"
             f"  💸 Operational Overhead: `${operational_cost}/mo`\n"
             f"  🏆 Projected System ROI: *{((projected_revenue - operational_cost) / max(operational_cost, 1)) * 100:,.1f}%*\n\n"
-
             "🛡️ *SECURITY & OVERRIDE PROTOCOL*\n"
             f"  System Lock State: *{self.veto_panel_mode}*\n"
             "  🛡️ _Armed Status: AI Outreach demands Ehab's direct authorization._\n\n"
@@ -504,4 +484,103 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "📋 *OPERATIONS INTERFACE PROTOCOLS*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "🔍 `/scrape [niche]
+        "🔍 `/scrape [niche] [city]`\n"
+        "   Triggers places extraction. Auto-saves phone and websiteUri fields "
+        "   directly to configured sheets.\n"
+        "   _Example: /scrape lawyers Miami_\n\n"
+        "🚀 `/launch_campaign`\n"
+        "   Initiates Outreach Module. Utilizes Option A messaging with dynamic "
+        "   synthesizer support.\n\n"
+        "📊 `/status`\n"
+        "   Synthesizes the entire system health and financial pipeline projections.\n\n"
+        "🧠 `/sentiment [text]`\n"
+        "   Processes user feedback or email payloads directly with AI sentiment categorization.\n"
+        "   _Example: /sentiment Let us call tomorrow at 10 AM._\n\n"
+        "💼 _Abdellah Ventures LLC (c) 2026_"
+    )
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
+
+@authorization_check
+async def scrape_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args or len(args) < 2:
+        await update.message.reply_text(
+            "⚠️ *Instruction Malformed.*\nUsage: `/scrape [niche] [city]`\n_Example: /scrape dentist Houston_",
+            parse_mode="Markdown"
+        )
+        return
+
+    niche = args[0]
+    city = " ".join(args[1:])
+
+    status_msg = await update.message.reply_text(
+        f"🔍 *SCRAPER INITIATED*\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 Target Niche: `{niche}`\n"
+        f"📍 Location Pool: `{city}`\n"
+        "⏳ Fetching Places API v1 Data streams...\n"
+        "_Extracting Phone contacts & Business URLs..._",
+        parse_mode="Markdown"
+    )
+
+    try:
+        results = await scraper.execute_pipeline(niche, city)
+        if results:
+            leads_found = len(results)
+            ai_insight = await gemini.process_command_intelligence(
+                "scrape", {"leads_found": leads_found, "niche": niche, "city": city}
+            )
+            response = (
+                "✅ *SCRAPE COMPLETED AND SYNCED*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎯 Niche: `{niche}`\n"
+                f"📍 City: `{city}`\n"
+                f"📊 Qualified Profiles Added: *{leads_found}*\n"
+                "📝 Sync Mode: `GOOGLE_SHEETS_AUTOMATED`\n\n"
+                f"🧠 *Gemini Cognitive Report:*\n{ai_insight}\n\n"
+                "_New leads successfully logged in database pipelines._"
+            )
+        else:
+            response = (
+                "❌ *EXTRACTION NODE RETURNED 0 RESULTS*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Verify that GOOGLE_MAPS_API_KEY is active and billing is enabled on Google Cloud."
+            )
+        await status_msg.edit_text(response, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"[SCRAPER] Critical error: {e}")
+        await status_msg.edit_text(f"❌ *Scraper Module Failed:* `{str(e)[:150]}`", parse_mode="Markdown")
+
+
+@authorization_check
+async def launch_campaign_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    status_msg = await update.message.reply_text(
+        "🚀 *CONSTRUCTING TARGET SEQUENCE...*\n"
+        "⏳ Synthesizing Option A layouts...",
+        parse_mode="Markdown"
+    )
+    try:
+        result = await campaign_engine.launch()
+        if result.get("status") == "no_leads":
+            response = (
+                "⚠️ *SEQUENCE BLOCKED BY OUTREACH ENGINE*\n"
+                f"Reason: `{result.get('message')}`\n\n"
+                "💡 Please acquire active prospect pools first via `/scrape`."
+            )
+        else:
+            response = (
+                "✅ *OUTREACH SEQUENCE ACTIVATED*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🆔 Sequence ID: `{result['campaign_id']}`\n"
+                f"📋 Target Table: `{result['target_sheet']}`\n"
+                f"👥 Targeted Contacts: *{result['total_leads']}*\n"
+                f"⚙️ Messaging Matrix: *{result['messaging']}*\n"
+                f"🕐 Ignition Timestamp: `{result['launched_at']}`\n\n"
+                f"🧠 *AI Generated Sequence Header:*\n"
+                f"
+http://googleusercontent.com/immersive_entry_chip/0
+
+---
+
+الماكينة جاهزة درك ومغلوقة بالمليمتر والأسطر كامل مريغلة. الصقها وخلينا نطلقوا عملية الـ Deployment ونشوفوا الضوء الأخضر! 🚀🔥🏁
