@@ -205,11 +205,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @authorization_check
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    h = ("📋 *SYSTEM MANUAL*\n\n"
-         "🔍 `/scrape [niche] [city]`\n"
-         "🚀 `/launch_campaign`\n"
-         "📊 `/status`\n"
-         "🧠 `/sentiment [text]`")
+    h = "📋 *SYSTEM MANUAL*\n\n🔍 `/scrape [niche] [city]`\n🚀 `/launch_campaign`\n📊 `/status`\n🧠 `/sentiment [text]`"
     await update.message.reply_text(h, parse_mode="Markdown")
 
 @authorization_check
@@ -247,8 +243,9 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args: return
     txt = " ".join(context.args)
     res = await gemini.analyze_sentiment(txt)
-    await update.message.reply_text(f"🧠 *SENTINEL REPORT*\n```json\n{res['raw_response']}\n
-```", parse_mode="Markdown")
+    output = f"🧠 *SENTINEL REPORT*\n```json\n{res['raw_response']}\n
+```"
+    await update.message.reply_text(output, parse_mode="Markdown")
 
 async def post_init(app: Application) -> None:
     await app.bot.set_my_commands([
