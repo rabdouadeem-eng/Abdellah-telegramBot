@@ -1,7 +1,8 @@
-python-telegram-bot==20.8
+protobuf==3.20.3
+python-telegram-bot==20.7
 google-generativeai==0.3.2
 gspread==6.0.0
 google-auth==2.27.0
-beautifulsoup4==4.12.3
 aiohttp==3.9.3
+beautifulsoup4==4.12.3
 python-dotenv==1.0.1
