@@ -36,8 +36,14 @@ class Config:
     OPTION_A_SUBJECT = "Quick question about {business_name}"
     OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
     
-    # محرك التوافق والفرض (Aria V6)
-    OPENROUTER_MODEL = "cohere/command-r-plus"
+    # 📋 لستة الموديلات المجانية المعزوزة (إذا تعطل واحد يشتغل الآخر تلقائياً)
+    FREE_MODELS_POOL = [
+        "google/gemini-2.5-flash:free",
+        "google/gemini-flash-1.5-8b:free",
+        "google/gemini-2.5-pro:free",
+        "meta-llama/llama-3-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free"
+    ]
     
     @classmethod
     def validate(cls):
@@ -70,7 +76,7 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-# ========== محرك الذكاء الاصطناعي الخاص بـ AbdouGemiBot ==========
+# ========== محرك الذكاء الاصطناعي بنظام الـ Fallback المجاني ==========
 class AbdouGemiEngine:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
@@ -79,30 +85,33 @@ class AbdouGemiEngine:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        logger.info("✅ AbdouGemi Engine initialized successfully")
+        logger.info("✅ AbdouGemi Engine initialized with multi-model backup pool")
 
     async def _call_ai(self, prompt: str) -> str:
         if not self.api_key:
             return "⚠️ المحرك أوفلاين. تحقق من الإعدادات."
         
-        payload = {
-            "model": Config.OPENROUTER_MODEL,
-            "messages": [{"role": "user", "content": prompt}]
-        }
+        # يدور على لستة الموديلات الفري واحد بواحد إذا صرا مشكل أو 401
+        for model in Config.FREE_MODELS_POOL:
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.url, headers=self.headers, json=payload, timeout=12) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            logger.info(f"✅ تم الرد بنجاح باستخدام الموديل المجاني: {model}")
+                            return data['choices'][0]['message']['content']
+                        else:
+                            logger.warning(f"⚠️ الموديل {model} عطلان (Status {resp.status}). جاري التحويل للتالي...")
+                            continue
+            except Exception as e:
+                logger.error(f"❌ فشل الاتصال بالموديل {model}: {e}. جاري التحويل...")
+                continue
         
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.url, headers=self.headers, json=payload, timeout=15) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data['choices'][0]['message']['content']
-                    else:
-                        error_data = await resp.text()
-                        logger.error(f"OpenRouter Error: Status {resp.status} - {error_data}")
-                        return f"❌ خطأ في النظام (Status {resp.status})"
-        except Exception as e:
-            logger.error(f"Connection error: {e}")
-            return f"❌ فشل الاتصال بالمحرك: {str(e)}"
+        return "❌ جميع الموديلات المجانية في السيرفر معطلة حالياً أو المفتاح غير صالح."
 
     async def chat_response(self, text: str) -> str:
         system_prompt = "You are AbdouGemiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
@@ -297,7 +306,7 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *عبد الله تلغرام بوت | @AbdouGemiBot*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Aria V6* وجاهز تماماً لخدمتك يا الزعيم إيهاب.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
+        "🤖 *عبد الله تلغرام بوت | @AbdouGemiBot*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بنظام الـ *Multi-Model Free Backup* (Gemini 1.5/2.5) وجاهز لخدمتك يا الزعيم إيهاب.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
         parse_mode="Markdown"
     )
 
@@ -366,9 +375,8 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = " ".join(context.args)
     result = await ai_engine.analyze_sentiment(text)
-    
-    # تم إصلاح هذا السطر (369) وإغلاق علامات الاقتباس تماماً لمنع الـ SyntaxError
-    output = f"🧠 *تقرير السنتينل لـ @AbdouGemiBot*\n```json\n{result['raw_response']}\n```"
+    output = f"🧠 *تقرير السنتينل لـ @AbdouGemiBot*\n```json\n{result['raw_response']}\n
+```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
 @authorization_check
