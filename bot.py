@@ -366,8 +366,9 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = " ".join(context.args)
     result = await ai_engine.analyze_sentiment(text)
-    output = f"🧠 *تقرير السنتينل لـ @AbdouGemiBot*\n```json\n{result['raw_response']}\n
-```"
+    
+    # تم إصلاح هذا السطر (369) وإغلاق علامات الاقتباس تماماً لمنع الـ SyntaxError
+    output = f"🧠 *تقرير السنتينل لـ @AbdouGemiBot*\n```json\n{result['raw_response']}\n```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
 @authorization_check
