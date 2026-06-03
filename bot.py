@@ -22,7 +22,7 @@ logger = logging.getLogger("AbdellahVenturesBot")
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # هنا تحط مفتاح OpenRouter (sk-or-...)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # هنا مفتاح OpenRouter (sk-or-...)
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
@@ -36,7 +36,6 @@ class Config:
     OPTION_A_SUBJECT = "Quick question about {business_name}"
     OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
     
-    # اسم الموديل الحر على OpenRouter
     OPENROUTER_MODEL = "google/gemini-1.5-flash"
     
     @classmethod
@@ -70,7 +69,7 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-# ========== محرك الاتصال بـ OpenRouter (منفصل ونظيف) ==========
+# ========== محرك الاتصال بـ OpenRouter ==========
 class GeminiEngine:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
@@ -80,7 +79,7 @@ class GeminiEngine:
             "Content-Type": "application/json"
         }
         if self.api_key:
-            logger.info("✅ OpenRouter Engine initialized successfully")
+            logger.info("✅ OpenRouter Engine initialized")
         else:
             logger.warning("⚠️ API key missing for OpenRouter")
 
@@ -372,11 +371,10 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = " ".join(context.args)
     result = await gemini.analyze_sentiment(text)
-    output = f"🧠 *SENTINEL REPORT*\n```\n{result['raw_response']}\n
-```"
+    output = f"🧠 *SENTINEL REPORT*\n```json\n{result['raw_response']}\n```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
-# ========== معالج المحادثة الحرة المنفصلة (Free Chat Handler) ==========
+# ========== معالج المحادثة الحرة المنفصلة ==========
 @authorization_check
 async def handle_free_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
@@ -401,7 +399,7 @@ def main() -> None:
     Config.validate()
     app = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     
-    # إضافة معالجات الأوامر (الكوماندوز)
+    # إضافة معالجات الأوامر
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("scrape", scrape_command))
@@ -409,10 +407,10 @@ def main() -> None:
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("sentiment", sentiment_command))
     
-    # إضافة معالج النصوص العادية الحرة (منفصل تماماً عن الأوامر)
+    # إضافة معالج النصوص الحرة
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_free_chat))
     
-    # تشغيل البوت: webhook إذا كان لدينا رابط خارجي، وإلا polling
+    # تشغيل البوت
     if Config.WEBHOOK_URL and Config.RENDER_EXTERNAL_URL:
         logger.info(f"🚀 Starting webhook mode on port {Config.PORT}, path {Config.WEBHOOK_PATH}")
         app.run_webhook(
