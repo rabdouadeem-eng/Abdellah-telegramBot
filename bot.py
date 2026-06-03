@@ -16,7 +16,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
-logger = logging.getLogger("AbduGeminiBot")
+logger = logging.getLogger("AbdouGemiBot")
 
 # ========== فئة الإعدادات ==========
 class Config:
@@ -70,8 +70,8 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-# ========== محرك الذكاء الاصطناعي الخاص بـ AbduGeminiBot ==========
-class AbduGeminiEngine:
+# ========== محرك الذكاء الاصطناعي الخاص بـ AbdouGemiBot ==========
+class AbdouGemiEngine:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
         self.url = "https://openrouter.ai/api/v1/chat/completions"
@@ -79,7 +79,7 @@ class AbduGeminiEngine:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        logger.info("✅ AbduGemini Engine initialized successfully")
+        logger.info("✅ AbdouGemi Engine initialized successfully")
 
     async def _call_ai(self, prompt: str) -> str:
         if not self.api_key:
@@ -105,7 +105,7 @@ class AbduGeminiEngine:
             return f"❌ فشل الاتصال بالمحرك: {str(e)}"
 
     async def chat_response(self, text: str) -> str:
-        system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
+        system_prompt = "You are AbdouGemiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
         return await self._call_ai(f"{system_prompt}\nUser says: {text}")
 
     async def analyze_sentiment(self, text: str) -> dict:
@@ -121,7 +121,7 @@ class AbduGeminiEngine:
         prompt = f"Write direct B2B cold outreach for {niche} in {city}. Sender Ehab, Abdellah Ventures LLC. Max 100 words."
         return await self._call_ai(prompt)
 
-ai_engine = AbduGeminiEngine()
+ai_engine = AbdouGemiEngine()
 
 # ========== الاتصال بـ Google Sheets ==========
 class SheetsConnector:
@@ -297,15 +297,15 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Aria V6* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
+        "🤖 *عبد الله تلغرام بوت | @AbdouGemiBot*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Aria V6* وجاهز تماماً لخدمتك يا الزعيم إيهاب.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
         parse_mode="Markdown"
     )
 
 @authorization_check
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "📋 *دليل التحكم لـ عبدوجيميبوت*\n\n"
-        "🔍 `/scrape [النظام] [المدينة]` - سحب الداتا وضخها في شيتس\n"
+        "📋 *دليل التحكم لـ @AbdouGemiBot*\n\n"
+        "🔍 `/scrape [المجال] [المدينة]` - سحب الداتا وضخها في شيتس\n"
         "🚀 `/launch_campaign` - إطلاق حملة تسويقية ذكية\n"
         "📊 `/status` - مراقبة الـ KPIs والمؤشرات\n"
         "🧠 `/sentiment [النص]` - تحليل المشاعر والردود عبر السنتينل\n"
@@ -342,7 +342,7 @@ async def launch_campaign_command(update: Update, context: ContextTypes.DEFAULT_
         await msg.edit_text("⚠️ تعذر الإطلاق. قاعدة البيانات فارغة، استعمل أمر /scrape أولاً.")
     else:
         await msg.edit_text(
-            f"🚀 *الحملة نشطة الآن عبر عبدوجيميبوت*\nالمعرف: `{result['campaign_id']}`\nعدد الأهداف: *{result['total_leads']}*\n\n📝 *صيغة الـ AI الذكية المؤتمتة:* \n{result['ai_enhanced_variant']}",
+            f"🚀 *الحملة نشطة الآن عبر @AbdouGemiBot*\nالمعرف: `{result['campaign_id']}`\nعدد الأهداف: *{result['total_leads']}*\n\n📝 *صيغة الـ AI الذكية المؤتمتة:* \n{result['ai_enhanced_variant']}",
             parse_mode="Markdown"
         )
 
@@ -366,7 +366,7 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = " ".join(context.args)
     result = await ai_engine.analyze_sentiment(text)
-    output = f"🧠 *تقرير السنتينل لـ عبدوجيميبوت*\n```json\n{result['raw_response']}\n
+    output = f"🧠 *تقرير السنتينل لـ @AbdouGemiBot*\n```json\n{result['raw_response']}\n
 ```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
@@ -386,7 +386,7 @@ async def post_init(app: Application) -> None:
         BotCommand("sentiment", "تحليل مشاعر النصوص"),
         BotCommand("help", "دليل التحكم")
     ])
-    logger.info("✅ Commands registered for AbduGeminiBot")
+    logger.info("✅ Commands registered for @AbdouGemiBot")
 
 def main() -> None:
     Config.validate()
