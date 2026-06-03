@@ -16,13 +16,13 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
-logger = logging.getLogger("AbdellahVenturesBot")
+logger = logging.getLogger("AbduGeminiBot")
 
 # ========== فئة الإعدادات ==========
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # هنا مفتاح OpenRouter (sk-or-...)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
@@ -36,7 +36,8 @@ class Config:
     OPTION_A_SUBJECT = "Quick question about {business_name}"
     OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
     
-    OPENROUTER_MODEL = "google/gemini-1.5-flash"
+    # محرك التوافق والفرض (Aria V6)
+    OPENROUTER_MODEL = "cohere/command-r-plus"
     
     @classmethod
     def validate(cls):
@@ -69,8 +70,8 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-# ========== محرك الاتصال بـ OpenRouter ==========
-class GeminiEngine:
+# ========== محرك الذكاء الاصطناعي الخاص بـ AbduGeminiBot ==========
+class AbduGeminiEngine:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
         self.url = "https://openrouter.ai/api/v1/chat/completions"
@@ -78,14 +79,11 @@ class GeminiEngine:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        if self.api_key:
-            logger.info("✅ OpenRouter Engine initialized")
-        else:
-            logger.warning("⚠️ API key missing for OpenRouter")
+        logger.info("✅ AbduGemini Engine initialized successfully")
 
     async def _call_ai(self, prompt: str) -> str:
         if not self.api_key:
-            return "⚠️ المحرك أوفلاين. تحقق من مفتاح الـ API."
+            return "⚠️ المحرك أوفلاين. تحقق من الإعدادات."
         
         payload = {
             "model": Config.OPENROUTER_MODEL,
@@ -101,13 +99,13 @@ class GeminiEngine:
                     else:
                         error_data = await resp.text()
                         logger.error(f"OpenRouter Error: Status {resp.status} - {error_data}")
-                        return f"❌ خطأ من الخادم (Status {resp.status})"
+                        return f"❌ خطأ في النظام (Status {resp.status})"
         except Exception as e:
-            logger.error(f"Connection error to OpenRouter: {e}")
+            logger.error(f"Connection error: {e}")
             return f"❌ فشل الاتصال بالمحرك: {str(e)}"
 
     async def chat_response(self, text: str) -> str:
-        system_prompt = "You are an authentic, adaptive AI collaborator with a touch of wit, helping the user Ehab manage his automated growth agency Abdellah Ventures LLC. Match his energy and style."
+        system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
         return await self._call_ai(f"{system_prompt}\nUser says: {text}")
 
     async def analyze_sentiment(self, text: str) -> dict:
@@ -123,7 +121,7 @@ class GeminiEngine:
         prompt = f"Write direct B2B cold outreach for {niche} in {city}. Sender Ehab, Abdellah Ventures LLC. Max 100 words."
         return await self._call_ai(prompt)
 
-gemini = GeminiEngine()
+ai_engine = AbduGeminiEngine()
 
 # ========== الاتصال بـ Google Sheets ==========
 class SheetsConnector:
@@ -261,7 +259,6 @@ class GooglePlacesScraper:
                 "City": city
             })
         await asyncio.to_thread(sheets.dump_leads, processed, niche, city)
-        logger.info(f"✅ Processed {len(processed)} leads for {niche} in {city}")
         return processed
 
 scraper = GooglePlacesScraper()
@@ -275,12 +272,12 @@ class CampaignEngine:
     async def launch(self) -> dict:
         lc = await asyncio.to_thread(sheets.get_lead_count)
         if not lc:
-            return {"status": "no_leads", "message": "No lead pools. Run /scrape first."}
+            return {"status": "no_leads", "message": "No lead pools available."}
         target_sheet = max(lc, key=lc.get)
         parts = target_sheet.replace("Leads_", "").split("_")
         niche = parts[0] if len(parts) > 0 else "enterprise"
         city = parts[1] if len(parts) > 1 else "market"
-        variant = await gemini.generate_outreach_variant(niche, city)
+        variant = await ai_engine.generate_outreach_variant(niche, city)
         campaign = {
             "campaign_id": f"CAM-{datetime.now().strftime('%Y%m%d-%H%M')}",
             "status": "launched",
@@ -292,7 +289,6 @@ class CampaignEngine:
         }
         self.active_campaign = campaign
         self.campaign_log.append(campaign)
-        logger.info(f"🚀 Campaign launched: {campaign['campaign_id']}")
         return campaign
 
 campaign_engine = CampaignEngine()
@@ -301,53 +297,52 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🏢 *ABDELLAH VENTURES LLC*\n✅ Core Interface Online.\nUse `/help` for system directives.",
+        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Aria V6* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
         parse_mode="Markdown"
     )
 
 @authorization_check
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "📋 *SYSTEM MANUAL*\n\n"
-        "🔍 `/scrape [niche] [city]` - Scrape leads from Google Places\n"
-        "🚀 `/launch_campaign` - Launch outreach campaign\n"
-        "📊 `/status` - Show lead counts and active campaign\n"
-        "🧠 `/sentiment [text]` - Analyze sentiment of text\n"
-        "❓ `/help` - This message"
+        "📋 *دليل التحكم لـ عبدوجيميبوت*\n\n"
+        "🔍 `/scrape [النظام] [المدينة]` - سحب الداتا وضخها في شيتس\n"
+        "🚀 `/launch_campaign` - إطلاق حملة تسويقية ذكية\n"
+        "📊 `/status` - مراقبة الـ KPIs والمؤشرات\n"
+        "🧠 `/sentiment [النص]` - تحليل المشاعر والردود عبر السنتينل\n"
+        "❓ `/help` - عرض هذا الدليل تكراراً"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
 @authorization_check
 async def scrape_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) < 2:
-        await update.message.reply_text("⚠️ Format: `/scrape [niche] [city]`\nExample: `/scrape cafes casablanca`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ الصيغة الصحيحة: `/scrape [niche] [city]`\nمثال: `/scrape cafes casablanca`", parse_mode="Markdown")
         return
     niche = context.args[0]
     city = " ".join(context.args[1:])
-    msg = await update.message.reply_text("⏳ *Extraction initiated...*", parse_mode="Markdown")
+    msg = await update.message.reply_text("⏳ *جاري استخراج البيانات وضخها...*", parse_mode="Markdown")
     try:
         leads = await scraper.execute_pipeline(niche, city)
         if leads:
-            insight = await gemini.process_command_intelligence("scrape", {"leads_found": len(leads), "niche": niche, "city": city})
+            insight = await ai_engine.process_command_intelligence("scrape", {"leads_found": len(leads), "niche": niche, "city": city})
             await msg.edit_text(
-                f"✅ *Synced {len(leads)} Leads.*\n\n🧠 *Insight:* {insight}",
+                f"✅ *تم بنجاح سحب وضخ {len(leads)} عميل محتمل.*\n\n🧠 *تحليل ذكي:* {insight}",
                 parse_mode="Markdown"
             )
         else:
-            await msg.edit_text("❌ Extraction returned 0 records. Check API key or try different niche/city.")
+            await msg.edit_text("❌ لم يتم العثور على بيانات. تحقق من الكي أو الكلمات الدلالية.")
     except Exception as e:
-        logger.error(f"Scrape error: {e}")
-        await msg.edit_text(f"❌ Error: {str(e)}")
+        await msg.edit_text(f"❌ خطأ عملي: {str(e)}")
 
 @authorization_check
 async def launch_campaign_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("🚀 *Igniting Campaign...*", parse_mode="Markdown")
+    msg = await update.message.reply_text("🚀 *جاري إطلاق الحملة التسويقية...*", parse_mode="Markdown")
     result = await campaign_engine.launch()
     if result.get("status") == "no_leads":
-        await msg.edit_text("⚠️ Outreach blocked. Database empty. Use /scrape first.")
+        await msg.edit_text("⚠️ تعذر الإطلاق. قاعدة البيانات فارغة، استعمل أمر /scrape أولاً.")
     else:
         await msg.edit_text(
-            f"✅ *Campaign Active*\nID: `{result['campaign_id']}`\nLeads: *{result['total_leads']}*\n\n📝 *AI Outreach Variant:* \n{result['ai_enhanced_variant']}",
+            f"🚀 *الحملة نشطة الآن عبر عبدوجيميبوت*\nالمعرف: `{result['campaign_id']}`\nعدد الأهداف: *{result['total_leads']}*\n\n📝 *صيغة الـ AI الذكية المؤتمتة:* \n{result['ai_enhanced_variant']}",
             parse_mode="Markdown"
         )
 
@@ -355,51 +350,48 @@ async def launch_campaign_command(update: Update, context: ContextTypes.DEFAULT_
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lead_counts = await asyncio.to_thread(sheets.get_lead_count)
     total = sum(lead_counts.values())
-    active_camp = campaign_engine.active_campaign['campaign_id'] if campaign_engine.active_campaign else 'None'
+    active_camp = campaign_engine.active_campaign['campaign_id'] if campaign_engine.active_campaign else 'لا يوجد'
     text = (
-        f"📊 *OPERATIONAL KPI PORTAL*\n\n"
-        f"📌 Total Leads: *{total}*\n"
-        f"🚀 Active Campaign: `{active_camp}`\n"
-        f"📁 Lead Sources: {len(lead_counts)} categories"
+        f"📊 *بوابة المراقبة و الـ KPIs*\n\n"
+        f"📌 إجمالي الداتا المسحوبة: *{total}*\n"
+        f"🚀 الحملة الحالية النشطة: `{active_camp}`\n"
+        f"📁 عدد التصنيفات المتصلة: {len(lead_counts)}"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
 @authorization_check
 async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("⚠️ Usage: `/sentiment [text to analyze]`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ الاستخدام: `/sentiment [النص المراد تحليله]`", parse_mode="Markdown")
         return
     text = " ".join(context.args)
-    result = await gemini.analyze_sentiment(text)
-    output = f"🧠 *SENTINEL REPORT*\n```json\n{result['raw_response']}\n```"
+    result = await ai_engine.analyze_sentiment(text)
+    output = f"🧠 *تقرير السنتينل لـ عبدوجيميبوت*\n```json\n{result['raw_response']}\n
+```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
-# ========== معالج المحادثة الحرة المنفصلة ==========
 @authorization_check
 async def handle_free_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     await update.message.chat.send_action(action="typing")
-    reply = await gemini.chat_response(user_text)
+    reply = await ai_engine.chat_response(user_text)
     await update.message.reply_text(reply)
 
-# ========== الإعداد بعد بدء التطبيق ==========
 async def post_init(app: Application) -> None:
     await app.bot.set_my_commands([
-        BotCommand("start", "Initialize system"),
-        BotCommand("scrape", "Scrape leads from Google Places"),
-        BotCommand("launch_campaign", "Launch outreach campaign"),
-        BotCommand("status", "Show KPIs"),
-        BotCommand("sentiment", "Analyze text sentiment"),
-        BotCommand("help", "Show manual")
+        BotCommand("start", "تشغيل واجهة عبدوجيميبوت"),
+        BotCommand("scrape", "سحب بيانات من قوقل مابس"),
+        BotCommand("launch_campaign", "إطلاق حملة مستهدفة"),
+        BotCommand("status", "عرض إحصائيات الداتا"),
+        BotCommand("sentiment", "تحليل مشاعر النصوص"),
+        BotCommand("help", "دليل التحكم")
     ])
-    logger.info("✅ Bot commands registered")
+    logger.info("✅ Commands registered for AbduGeminiBot")
 
-# ========== التشغيل الرئيسي ==========
 def main() -> None:
     Config.validate()
     app = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     
-    # إضافة معالجات الأوامر
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("scrape", scrape_command))
@@ -407,12 +399,10 @@ def main() -> None:
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("sentiment", sentiment_command))
     
-    # إضافة معالج النصوص الحرة
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_free_chat))
     
-    # تشغيل البوت
     if Config.WEBHOOK_URL and Config.RENDER_EXTERNAL_URL:
-        logger.info(f"🚀 Starting webhook mode on port {Config.PORT}, path {Config.WEBHOOK_PATH}")
+        logger.info(f"🚀 Webhook mode on port {Config.PORT}")
         app.run_webhook(
             listen="0.0.0.0",
             port=Config.PORT,
@@ -420,7 +410,7 @@ def main() -> None:
             webhook_url=Config.WEBHOOK_URL
         )
     else:
-        logger.info("🔄 WEBHOOK_URL not set, falling back to polling mode")
+        logger.info("🔄 Polling mode active")
         app.run_polling()
 
 if __name__ == "__main__":
