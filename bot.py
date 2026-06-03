@@ -366,7 +366,10 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = " ".join(context.args)
     result = await ai_engine.analyze_sentiment(text)
-    output = f"🧠 *تقرير السنتينل لـ عبدوجيميبوت*\n```json\n{result['raw_response']}\n
+    output = (
+    f"🧠 *SENTINEL REPORT*\n"
+    f"```\n{result['raw_response'][:500]}\n```"
+)
 ```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
