@@ -36,7 +36,7 @@ class Config:
     OPTION_A_SUBJECT = "Quick question about {business_name}"
     OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
 
-   OPENROUTER_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+    OPENROUTER_MODEL = "cohere/command-r-plus"
 
     @classmethod
     def validate(cls):
