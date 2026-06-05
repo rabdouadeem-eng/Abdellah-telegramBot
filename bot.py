@@ -84,24 +84,24 @@ class AbduGeminiEngine:
         if not self.api_key:
             return "⚠️ المحرك أوفلاين. تحقق من الإعدادات."
 
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
         payload = {
-            "model": Config.OPENROUTER_MODEL,
-            "messages": [{"role": "user", "content": prompt}]
+            "contents": [{"parts": [{"text": prompt}]}]
         }
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(self.url, headers=self.headers, json=payload, timeout=15) as resp:
+                async with session.post(url, json=payload, timeout=15) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        return data['choices'][0]['message']['content']
+                        return data['candidates'][0]['content']['parts'][0]['text']
                     else:
                         error_data = await resp.text()
-                        logger.error(f"OpenRouter Error: Status {resp.status} - {error_data}")
+                        logger.error(f"Gemini Error: {resp.status} - {error_data}")
                         return f"❌ خطأ في النظام (Status {resp.status})"
         except Exception as e:
             logger.error(f"Connection error: {e}")
-            return f"❌ فشل الاتصال بالمحرك: {str(e)}"
+            return f"❌ فشل الاتصال: {str(e)}"
 
     async def chat_response(self, text: str) -> str:
         system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
