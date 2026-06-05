@@ -22,7 +22,7 @@ logger = logging.getLogger("AbduGeminiBot")
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    GEMINI_API_KEY = os.getenv("OPENROUTER_API_KEY")
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
