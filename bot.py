@@ -22,23 +22,22 @@ logger = logging.getLogger("AbduGeminiBot")
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
-    
+
     RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
     PORT = int(os.getenv("PORT", "8443"))
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "default-secret-999")
     WEBHOOK_PATH = f"/webhook/{WEBHOOK_SECRET}"
     WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
-    
+
     OPTION_A_SUBJECT = "Quick question about {business_name}"
     OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
-    
-    # محرك التوافق والفرض (Aria V6)
+
     OPENROUTER_MODEL = "cohere/command-r-plus"
-    
+
     @classmethod
     def validate(cls):
         required = ["TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "AUTHORIZED_USER_ID", "GOOGLE_SHEET_ID"]
@@ -46,7 +45,7 @@ class Config:
         if missing:
             logger.critical(f"❌ المتغيرات الناقصة: {missing}")
             sys.exit(1)
-        
+
         if cls.GOOGLE_CREDS_JSON:
             try:
                 json.loads(cls.GOOGLE_CREDS_JSON)
@@ -70,7 +69,7 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-# ========== محرك الذكاء الاصطناعي الخاص بـ AbduGeminiBot ==========
+# ========== محرك الذكاء الاصطناعي ==========
 class AbduGeminiEngine:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
@@ -84,12 +83,12 @@ class AbduGeminiEngine:
     async def _call_ai(self, prompt: str) -> str:
         if not self.api_key:
             return "⚠️ المحرك أوفلاين. تحقق من الإعدادات."
-        
+
         payload = {
             "model": Config.OPENROUTER_MODEL,
             "messages": [{"role": "user", "content": prompt}]
         }
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.url, headers=self.headers, json=payload, timeout=15) as resp:
@@ -126,7 +125,7 @@ ai_engine = AbduGeminiEngine()
 # ========== الاتصال بـ Google Sheets ==========
 class SheetsConnector:
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    
+
     def __init__(self):
         self.gc = None
         self.sheet = None
@@ -177,7 +176,7 @@ class SheetsConnector:
                 str(l.get("Total Reviews", 0)),
                 l.get("Status", "N/A"),
                 l.get("Place ID", ""),
-                city,
+                l.get("City", "N/A"),
                 datetime.now().isoformat(),
                 "NEW"
             ])
@@ -365,13 +364,11 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ الاستخدام: `/sentiment [النص المراد تحليله]`", parse_mode="Markdown")
         return
     text = " ".join(context.args)
-result = await ai_engine.analyze_sentiment(text)
-output = (
-    f"🧠 *SENTINEL REPORT*\n"
-    f"```\n{result['raw_response'][:500]}\n```"
-)
-await update.message.reply_text(output, parse_mode="Markdown")
-```"
+    result = await ai_engine.analyze_sentiment(text)
+    output = (
+        f"🧠 *SENTINEL REPORT*\n"
+        f"```\n{result['raw_response'][:500]}\n```"
+    )
     await update.message.reply_text(output, parse_mode="Markdown")
 
 @authorization_check
@@ -395,16 +392,16 @@ async def post_init(app: Application) -> None:
 def main() -> None:
     Config.validate()
     app = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
-    
+
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("scrape", scrape_command))
     app.add_handler(CommandHandler("launch_campaign", launch_campaign_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("sentiment", sentiment_command))
-    
+
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_free_chat))
-    
+
     if Config.WEBHOOK_URL and Config.RENDER_EXTERNAL_URL:
         logger.info(f"🚀 Webhook mode on port {Config.PORT}")
         app.run_webhook(
