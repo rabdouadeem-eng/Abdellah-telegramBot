@@ -8,17 +8,14 @@ from datetime import datetime
 import aiohttp
 import gspread
 from google.oauth2.service_account import Credentials
+from google.api_core.exceptions import TooManyRequests
+import google.generativeai as genai
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-# ========== إعدادات التسجيل ==========
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger("AbduGeminiBot")
 
-# ========== فئة الإعدادات ==========
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
@@ -26,17 +23,13 @@ class Config:
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
-
     RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
     PORT = int(os.getenv("PORT", "8443"))
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "default-secret-999")
     WEBHOOK_PATH = f"/webhook/{WEBHOOK_SECRET}"
     WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
-
     OPTION_A_SUBJECT = "Quick question about {business_name}"
     OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
-
-    OPENROUTER_MODEL = "google/gemma-3-4b-it:free"
 
     @classmethod
     def validate(cls):
@@ -45,7 +38,6 @@ class Config:
         if missing:
             logger.critical(f"❌ المتغيرات الناقصة: {missing}")
             sys.exit(1)
-
         if cls.GOOGLE_CREDS_JSON:
             try:
                 json.loads(cls.GOOGLE_CREDS_JSON)
@@ -55,7 +47,6 @@ class Config:
             except Exception as e:
                 logger.error(f"❌ فشل حفظ google_creds.json: {e}")
 
-# ========== التحقق من الصلاحية ==========
 def is_authorized(user_id: int) -> bool:
     return user_id == Config.AUTHORIZED_USER_ID
 
@@ -69,39 +60,30 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-# ========== محرك الذكاء الاصطناعي ==========
 class AbduGeminiEngine:
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
-        self.url = "https://openrouter.ai/api/v1/chat/completions"
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        genai.configure(api_key=self.api_key)
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.semaphore = asyncio.Semaphore(1)
         logger.info("✅ AbduGemini Engine initialized successfully")
 
     async def _call_ai(self, prompt: str) -> str:
         if not self.api_key:
             return "⚠️ المحرك أوفلاين. تحقق من الإعدادات."
-
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=15) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data['candidates'][0]['content']['parts'][0]['text']
-                    else:
-                        error_data = await resp.text()
-                        logger.error(f"Gemini Error: {resp.status} - {error_data}")
-                        return f"❌ خطأ في النظام (Status {resp.status})"
-        except Exception as e:
-            logger.error(f"Connection error: {e}")
-            return f"❌ فشل الاتصال: {str(e)}"
+        async with self.semaphore:
+            for attempt in range(5):
+                try:
+                    response = await self.model.generate_content_async(prompt)
+                    return response.text
+                except TooManyRequests:
+                    wait = 2 ** attempt
+                    logger.warning(f"Rate limit, waiting {wait}s (attempt {attempt+1})")
+                    await asyncio.sleep(wait)
+                except Exception as e:
+                    logger.error(f"Gemini error: {e}")
+                    return f"❌ خطأ في النظام: {str(e)}"
+            return "⚠️ الخدمة مشغولة، حاول بعد دقيقة."
 
     async def chat_response(self, text: str) -> str:
         system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
@@ -122,7 +104,6 @@ class AbduGeminiEngine:
 
 ai_engine = AbduGeminiEngine()
 
-# ========== الاتصال بـ Google Sheets ==========
 class SheetsConnector:
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
@@ -155,7 +136,6 @@ class SheetsConnector:
         except gspread.exceptions.WorksheetNotFound:
             ws = self.sheet.add_worksheet(title=title, rows=1000, cols=12)
             ws.append_row(["Category", "Name", "Phone", "Website", "Address", "Rating", "Total Reviews", "Status", "Place ID", "City", "Timestamp", "Campaign Stage"])
-            logger.info(f"✅ Created new worksheet: {title}")
             return ws
 
     def dump_leads(self, leads: list, niche: str, city: str) -> int:
@@ -166,23 +146,12 @@ class SheetsConnector:
             return 0
         rows = []
         for l in leads:
-            rows.append([
-                niche,
-                l.get("Name", "N/A"),
-                l.get("Phone", "N/A"),
-                l.get("Website", "N/A"),
-                l.get("Address", "N/A"),
-                str(l.get("Rating", "N/A")),
-                str(l.get("Total Reviews", 0)),
-                l.get("Status", "N/A"),
-                l.get("Place ID", ""),
-                l.get("City", "N/A"),
-                datetime.now().isoformat(),
-                "NEW"
-            ])
+            rows.append([niche, l.get("Name", "N/A"), l.get("Phone", "N/A"), l.get("Website", "N/A"),
+                         l.get("Address", "N/A"), str(l.get("Rating", "N/A")), str(l.get("Total Reviews", 0)),
+                         l.get("Status", "N/A"), l.get("Place ID", ""), l.get("City", "N/A"),
+                         datetime.now().isoformat(), "NEW"])
         if rows:
             ws.append_rows(rows)
-            logger.info(f"✅ Dumped {len(rows)} leads to {ws.title}")
         return len(rows)
 
     def get_lead_count(self) -> dict:
@@ -199,7 +168,6 @@ class SheetsConnector:
 
 sheets = SheetsConnector()
 
-# ========== ماسح Google Places ==========
 class GooglePlacesScraper:
     def __init__(self):
         self.headers = {
@@ -210,7 +178,6 @@ class GooglePlacesScraper:
 
     async def fetch_places(self, query: str, max_results: int = 40) -> list:
         if not Config.GOOGLE_MAPS_API_KEY:
-            logger.error("❌ Google Maps API key missing")
             return []
         url = "https://places.googleapis.com/v1/places:searchText"
         results = []
@@ -223,7 +190,6 @@ class GooglePlacesScraper:
                 try:
                     async with session.post(url, json=body, timeout=15) as resp:
                         if resp.status != 200:
-                            logger.error(f"Places API error: {resp.status}")
                             break
                         data = await resp.json()
                 except Exception as e:
@@ -246,23 +212,18 @@ class GooglePlacesScraper:
         processed = []
         for p in raw:
             processed.append({
-                "Category": niche,
-                "Name": p.get("displayName", {}).get("text", "N/A"),
-                "Phone": p.get("nationalPhoneNumber", "N/A"),
-                "Website": p.get("websiteUri", "N/A"),
-                "Address": p.get("formattedAddress", "N/A"),
-                "Rating": p.get("rating", "N/A"),
+                "Category": niche, "Name": p.get("displayName", {}).get("text", "N/A"),
+                "Phone": p.get("nationalPhoneNumber", "N/A"), "Website": p.get("websiteUri", "N/A"),
+                "Address": p.get("formattedAddress", "N/A"), "Rating": p.get("rating", "N/A"),
                 "Total Reviews": p.get("userRatingCount", 0),
                 "Status": "Open" if p.get("currentOpeningHours", {}).get("openNow") else "Closed",
-                "Place ID": p.get("id", ""),
-                "City": city
+                "Place ID": p.get("id", ""), "City": city
             })
         await asyncio.to_thread(sheets.dump_leads, processed, niche, city)
         return processed
 
 scraper = GooglePlacesScraper()
 
-# ========== محرك الحملات ==========
 class CampaignEngine:
     def __init__(self):
         self.campaign_log = []
@@ -279,10 +240,8 @@ class CampaignEngine:
         variant = await ai_engine.generate_outreach_variant(niche, city)
         campaign = {
             "campaign_id": f"CAM-{datetime.now().strftime('%Y%m%d-%H%M')}",
-            "status": "launched",
-            "target_sheet": target_sheet,
-            "total_leads": lc[target_sheet],
-            "messaging": "Option A Core",
+            "status": "launched", "target_sheet": target_sheet,
+            "total_leads": lc[target_sheet], "messaging": "Option A Core",
             "ai_enhanced_variant": variant,
             "launched_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
         }
@@ -292,11 +251,10 @@ class CampaignEngine:
 
 campaign_engine = CampaignEngine()
 
-# ========== أوامر البوت ==========
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Aria V6* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
+        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Gemini 2.0 Flash* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
         parse_mode="Markdown"
     )
 
@@ -324,10 +282,7 @@ async def scrape_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         leads = await scraper.execute_pipeline(niche, city)
         if leads:
             insight = await ai_engine.process_command_intelligence("scrape", {"leads_found": len(leads), "niche": niche, "city": city})
-            await msg.edit_text(
-                f"✅ *تم بنجاح سحب وضخ {len(leads)} عميل محتمل.*\n\n🧠 *تحليل ذكي:* {insight}",
-                parse_mode="Markdown"
-            )
+            await msg.edit_text(f"✅ *تم بنجاح سحب وضخ {len(leads)} عميل محتمل.*\n\n🧠 *تحليل ذكي:* {insight}", parse_mode="Markdown")
         else:
             await msg.edit_text("❌ لم يتم العثور على بيانات. تحقق من الكي أو الكلمات الدلالية.")
     except Exception as e:
@@ -341,7 +296,7 @@ async def launch_campaign_command(update: Update, context: ContextTypes.DEFAULT_
         await msg.edit_text("⚠️ تعذر الإطلاق. قاعدة البيانات فارغة، استعمل أمر /scrape أولاً.")
     else:
         await msg.edit_text(
-            f"🚀 *الحملة نشطة الآن عبر عبدوجيميبوت*\nالمعرف: `{result['campaign_id']}`\nعدد الأهداف: *{result['total_leads']}*\n\n📝 *صيغة الـ AI الذكية المؤتمتة:* \n{result['ai_enhanced_variant']}",
+            f"🚀 *الحملة نشطة الآن*\nالمعرف: `{result['campaign_id']}`\nعدد الأهداف: *{result['total_leads']}*\n\n📝 *صيغة الـ AI:*\n{result['ai_enhanced_variant']}",
             parse_mode="Markdown"
         )
 
@@ -365,10 +320,7 @@ async def sentiment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = " ".join(context.args)
     result = await ai_engine.analyze_sentiment(text)
-    output = (
-        f"🧠 *SENTINEL REPORT*\n"
-        f"```\n{result['raw_response'][:500]}\n```"
-    )
+    output = f"🧠 *SENTINEL REPORT*\n```\n{result['raw_response'][:500]}\n```"
     await update.message.reply_text(output, parse_mode="Markdown")
 
 @authorization_check
@@ -392,24 +344,16 @@ async def post_init(app: Application) -> None:
 def main() -> None:
     Config.validate()
     app = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
-
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("scrape", scrape_command))
     app.add_handler(CommandHandler("launch_campaign", launch_campaign_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("sentiment", sentiment_command))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_free_chat))
-
     if Config.WEBHOOK_URL and Config.RENDER_EXTERNAL_URL:
         logger.info(f"🚀 Webhook mode on port {Config.PORT}")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=Config.PORT,
-            url_path=Config.WEBHOOK_PATH,
-            webhook_url=Config.WEBHOOK_URL
-        )
+        app.run_webhook(listen="0.0.0.0", port=Config.PORT, url_path=Config.WEBHOOK_PATH, webhook_url=Config.WEBHOOK_URL)
     else:
         logger.info("🔄 Polling mode active")
         app.run_polling()
