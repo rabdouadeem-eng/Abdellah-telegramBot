@@ -72,7 +72,7 @@ class AbduGeminiEngine:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, lambda:
                     self.client.chat.completions.create(
-                        model="nvidia/llama-3.1-nemotron-70b-instruct:free"
+                        model="nvidia/llama-3.1-nemotron-70b-instruct:free"٫
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=500
                     )
