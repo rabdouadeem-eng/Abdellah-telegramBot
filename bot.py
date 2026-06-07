@@ -1,6 +1,6 @@
 import os
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-import sys
+from openai import OpenAI
 import json
 import logging
 import asyncio
@@ -60,31 +60,31 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
+           return "⚠️ الخدمة مشغولة، حاول بعد دقيقة."
 class AbduGeminiEngine:
     def __init__(self):
-        self.api_key = Config.GEMINI_API_KEY
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.client = __import__('openai').OpenAI(
+            api_key=os.getenv("OPENROUTER_KEY"),
+            base_url="https://openrouter.ai/api/v1"
+        )
         self.semaphore = asyncio.Semaphore(1)
         logger.info("✅ AbduGemini Engine initialized successfully")
 
     async def _call_ai(self, prompt: str) -> str:
-        if not self.api_key:
-            return "⚠️ المحرك أوفلاين. تحقق من الإعدادات."
         async with self.semaphore:
-            for attempt in range(5):
-                try:
-                    response = await self.model.generate_content_async(prompt)
-                    return response.text
-                except TooManyRequests:
-                    wait = 2 ** attempt
-                    logger.warning(f"Rate limit, waiting {wait}s (attempt {attempt+1})")
-                    await asyncio.sleep(wait)
-                except Exception as e:
-                    logger.error(f"Gemini error: {e}")
-                    return f"❌ خطأ في النظام: {str(e)}"
-            return "⚠️ الخدمة مشغولة، حاول بعد دقيقة."
-
+            try:
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, lambda:
+                    self.client.chat.completions.create(
+                        model="openrouter/auto",
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=500
+                    )
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"OpenRouter error: {e}")
+                return f"❌ خطأ: {str(e)}"
     async def chat_response(self, text: str) -> str:
         system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
         return await self._call_ai(f"{system_prompt}\nUser says: {text}")
