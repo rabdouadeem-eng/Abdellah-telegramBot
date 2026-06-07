@@ -60,7 +60,7 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-           return "⚠️ الخدمة مشغولة، حاول بعد دقيقة."
+           
 class AbduGeminiEngine:
     def __init__(self):
         self.client = __import__('openai').OpenAI(
