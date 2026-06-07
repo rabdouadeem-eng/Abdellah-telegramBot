@@ -71,8 +71,12 @@ class AbduGeminiEngine:
             try:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, lambda:
-                    self.client.chat.completions.create(
-                        model="qwen/qwen3-8b:free",
+                    self.client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"
+)
+# في model:
+model="deepseek-chat",
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=500
                     )
