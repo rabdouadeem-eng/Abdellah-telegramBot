@@ -1,15 +1,14 @@
 import os
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-from openai import OpenAI
+import sys
 import json
 import logging
 import asyncio
 from datetime import datetime
+from openai import OpenAI
 import aiohttp
 import gspread
 from google.oauth2.service_account import Credentials
-from google.api_core.exceptions import TooManyRequests
-import google.generativeai as genai
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -19,7 +18,7 @@ logger = logging.getLogger("AbduGeminiBot")
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    OPENROUTER_KEY = os.getenv("OPENROUTER_AP...")  # ← حط الاسم الكامل هنا
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
@@ -28,12 +27,10 @@ class Config:
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "default-secret-999")
     WEBHOOK_PATH = f"/webhook/{WEBHOOK_SECRET}"
     WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
-    OPTION_A_SUBJECT = "Quick question about {business_name}"
-    OPTION_A_BODY = "Hi {owner_name},\n\nI came across {business_name} in {city}. We add 20-40% more inbound leads using AI.\n\nOpen for a 10-min call?\n\nBest,\nEhab\nAbdellah Ventures LLC"
 
     @classmethod
     def validate(cls):
-        required = ["TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "AUTHORIZED_USER_ID", "GOOGLE_SHEET_ID"]
+        required = ["TELEGRAM_BOT_TOKEN", "AUTHORIZED_USER_ID", "GOOGLE_SHEET_ID"]
         missing = [r for r in required if not os.getenv(r)]
         if missing:
             logger.critical(f"❌ المتغيرات الناقصة: {missing}")
@@ -60,11 +57,10 @@ def authorization_check(func):
         return await func(update, context)
     return wrapper
 
-           
 class AbduGeminiEngine:
     def __init__(self):
-        self.client = __import__('openai').OpenAI(
-            api_key=os.getenv("OPENROUTER_KEY"),
+        self.client = OpenAI(
+            api_key=Config.OPENROUTER_KEY,
             base_url="https://openrouter.ai/api/v1"
         )
         self.semaphore = asyncio.Semaphore(1)
@@ -85,8 +81,9 @@ class AbduGeminiEngine:
             except Exception as e:
                 logger.error(f"OpenRouter error: {e}")
                 return f"❌ خطأ: {str(e)}"
+
     async def chat_response(self, text: str) -> str:
-        system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant working directly under the directive of the founder Ehab for Abdellah Ventures LLC. Keep your tone professional, clever, and highly aligned with his goals."
+        system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant for Abdellah Ventures LLC. Be professional and helpful."
         return await self._call_ai(f"{system_prompt}\nUser says: {text}")
 
     async def analyze_sentiment(self, text: str) -> dict:
@@ -254,7 +251,7 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *Gemini 2.0 Flash* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
+        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *OpenRouter* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
         parse_mode="Markdown"
     )
 
