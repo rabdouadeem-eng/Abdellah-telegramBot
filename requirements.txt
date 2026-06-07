@@ -8,3 +8,4 @@ python-dotenv==1.0.1
 protobuf==4.25.3
 google-api-core
 aiolimiter==1.1.0
+openai
