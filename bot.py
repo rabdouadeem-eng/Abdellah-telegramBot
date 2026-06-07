@@ -325,6 +325,8 @@ async def handle_free_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     await update.message.chat.send_action(action="typing")
     reply = await ai_engine.chat_response(user_text)
+    if len(reply) > 4000:
+        reply = reply[:4000] + "...\n\n_(الرد مقتطع)_"
     await update.message.reply_text(reply)
 
 async def post_init(app: Application) -> None:
