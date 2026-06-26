@@ -72,7 +72,8 @@ class AbduGeminiEngine:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, lambda:
                     self.client.chat.completions.create(
-                        model="mistral-large",
+                        model="mimo-v2.5-free",
+         
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=500
                     )
