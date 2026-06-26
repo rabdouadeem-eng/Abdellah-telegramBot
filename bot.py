@@ -65,23 +65,21 @@ class AbduGeminiEngine:
         )
         self.semaphore = asyncio.Semaphore(1)
         logger.info("✅ AbduGemini Engine initialized successfully")
-
+    
     async def _call_ai(self, prompt: str) -> str:
         async with self.semaphore:
             try:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, lambda:
-                    self.client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com"
-)
-# في model:
-model="deepseek-chat",
+                    self.client.chat.completions.create(
+                        model="mistral-large",
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=500
                     )
                 )
                 return response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"OpenRouter            return response.choices[0].message.content
             except Exception as e:
                 logger.error(f"OpenRouter error: {e}")
                 return f"❌ خطأ: {str(e)}"
