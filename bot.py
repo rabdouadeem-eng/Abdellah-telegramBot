@@ -61,11 +61,11 @@ class AbduGeminiEngine:
     def __init__(self):
         self.client = OpenAI(
             api_key=Config.OPENROUTER_KEY,
-            base_url="https://openrouter.ai/api/v1"
+            base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         )
         self.semaphore = asyncio.Semaphore(1)
         logger.info("✅ AbduGemini Engine initialized successfully")
-    
+
     async def _call_ai(self, prompt: str) -> str:
         async with self.semaphore:
             try:
@@ -78,8 +78,6 @@ class AbduGeminiEngine:
                     )
                 )
                 return response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"OpenRouter            return response.choices[0].message.content
             except Exception as e:
                 logger.error(f"OpenRouter error: {e}")
                 return f"❌ خطأ: {str(e)}"
@@ -253,7 +251,7 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل ومنفصل بنجاح.\nالمحرك شغال بـ *OpenRouter* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة التوجيهات والأوامر.",
+        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل بنجاح.\nالمحرك شغال بـ *NaraRouter* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة الأوامر.",
         parse_mode="Markdown"
     )
 
