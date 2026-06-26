@@ -4,6 +4,7 @@ import sys
 import json
 import logging
 import asyncio
+import requests
 from datetime import datetime
 from openai import OpenAI
 import aiohttp
@@ -59,34 +60,32 @@ def authorization_check(func):
 
 class AbduGeminiEngine:
     def __init__(self):
-        self.client = OpenAI(
-            api_key=Config.OPENROUTER_KEY,
-            base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        )
         self.semaphore = asyncio.Semaphore(1)
+        self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        self.api_key = Config.OPENROUTER_KEY
         logger.info("✅ AbduGemini Engine initialized successfully")
 
     async def _call_ai(self, prompt: str) -> str:
-    async with self.semaphore:
-        try:
-            import requests
-            r = requests.post(
-                f"{os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {Config.OPENROUTER_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "mimo-v2.5-free",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 500
-                },
-                timeout=25
-            )
-            return r.json()["choices"][0]["message"]["content"]
-        except Exception as e:
-            logger.error(f"AI error: {e}")
-            return f"❌ خطأ: {str(e)}"
+        async with self.semaphore:
+            try:
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, lambda: requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "mimo-v2.5-free",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 500
+                    },
+                    timeout=25
+                ))
+                return response.json()["choices"][0]["message"]["content"]
+            except Exception as e:
+                logger.error(f"AI error: {e}")
+                return f"❌ خطأ: {str(e)}"
 
     async def chat_response(self, text: str) -> str:
         system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant for Abdellah Ventures LLC. Be professional and helpful."
