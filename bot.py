@@ -67,21 +67,26 @@ class AbduGeminiEngine:
         logger.info("✅ AbduGemini Engine initialized successfully")
 
     async def _call_ai(self, prompt: str) -> str:
-        async with self.semaphore:
-            try:
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(None, lambda:
-                    self.client.chat.completions.create(
-                        model="mimo-v2.5-free",
-         
-                        messages=[{"role": "user", "content": prompt}],
-                        max_tokens=500
-                    )
-                )
-                return response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"OpenRouter error: {e}")
-                return f"❌ خطأ: {str(e)}"
+    async with self.semaphore:
+        try:
+            import requests
+            r = requests.post(
+                f"{os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {Config.OPENROUTER_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "mimo-v2.5-free",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 500
+                },
+                timeout=25
+            )
+            return r.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"AI error: {e}")
+            return f"❌ خطأ: {str(e)}"
 
     async def chat_response(self, text: str) -> str:
         system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant for Abdellah Ventures LLC. Be professional and helpful."
