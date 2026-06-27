@@ -5,6 +5,7 @@ import json
 import logging
 import asyncio
 import requests
+import functools
 from datetime import datetime
 from openai import OpenAI
 import aiohttp
@@ -24,7 +25,7 @@ class Config:
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
     RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
-    PORT = int(os.getenv("PORT", "8443"))
+    PORT = int(os.getenv("PORT", "10000"))
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "default-secret-999")
     WEBHOOK_PATH = f"/webhook/{WEBHOOK_SECRET}"
     WEBHOOK_URL = f"{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}" if RENDER_EXTERNAL_URL else None
@@ -49,6 +50,7 @@ def is_authorized(user_id: int) -> bool:
     return user_id == Config.AUTHORIZED_USER_ID
 
 def authorization_check(func):
+    @functools.wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.effective_user:
             return
@@ -348,12 +350,12 @@ async def post_init(app: Application) -> None:
 def main() -> None:
     Config.validate()
     app = Application.builder()\
-    .token(Config.TELEGRAM_BOT_TOKEN)\
-    .post_init(post_init)\
-    .connect_timeout(30)\
-    .read_timeout(30)\
-    .write_timeout(30)\
-    .build()
+        .token(Config.TELEGRAM_BOT_TOKEN)\
+        .post_init(post_init)\
+        .connect_timeout(30)\
+        .read_timeout(30)\
+        .write_timeout(30)\
+        .build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("scrape", scrape_command))
@@ -363,7 +365,12 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_free_chat))
     if Config.WEBHOOK_URL and Config.RENDER_EXTERNAL_URL:
         logger.info(f"🚀 Webhook mode on port {Config.PORT}")
-        app.run_webhook(listen="0.0.0.0", port=Config.PORT, url_path=Config.WEBHOOK_PATH, webhook_url=Config.WEBHOOK_URL)
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=Config.PORT,
+            url_path=Config.WEBHOOK_PATH,
+            webhook_url=Config.WEBHOOK_URL
+        )
     else:
         logger.info("🔄 Polling mode active")
         app.run_polling()
