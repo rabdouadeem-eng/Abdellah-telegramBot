@@ -93,7 +93,7 @@ class AbduGeminiEngine:
                         ],
                         "max_tokens": 500
                     },
-                    timeout=25
+                    timeout=45
                 ))
                 return response.json()["choices"][0]["message"]["content"]
             except Exception as e:
