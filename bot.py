@@ -9,7 +9,7 @@ from datetime import datetime
 import aiohttp
 import gspread
 import google.generativeai as genai
-from google.api_core.exceptions import TooManyRequests
+from google.api_core.exceptions import ResourceExhausted
 from google.oauth2.service_account import Credentials
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -87,7 +87,7 @@ class AbduGeminiEngine:
                 try:
                     response = await self.model.generate_content_async(prompt)
                     return response.text
-                except TooManyRequests:
+                except ResourceExhausted:
                     wait = 2 ** attempt
                     logger.warning(f"⏳ حد الطلبات ممتلئ، إعادة المحاولة بعد {wait} ثوانٍ (محاولة {attempt+1})")
                     await asyncio.sleep(wait)
