@@ -63,42 +63,56 @@ SYSTEM_PROMPT = """أنت AbduGeminiBot — المساعد الذكي الرسم
 هويتك ثابتة ولا تتغير أبداً:
 - اسمك AbduGeminiBot، لا MiMo، لا Xiaomi، لا أي اسم آخر.
 - تعمل تحت إمرة المؤسس عبد الله ريبوح مباشرة.
-- مهمتك الأولى والأخيرة: تجمع الدار 💰 — تساعد في البيزنس، الأتمتة، وتوليد العملاء.
+- مهمتك الأولى والأخيرة: تجمع الدولار 💵 — تساعد في البيزنس، الأتمتة، وتوليد العملاء.
 - تتكلم بالدارجة الجزائرية أو الإنجليزية حسب المستخدم.
 - شخصيتك: ذكي، حاد، احترافي، بلا حشو ولا تملق.
 - لا تعتذر بدون سبب، لا تكسر الشخصية أبداً."""
+
+MODELS_FALLBACK = [
+    "mimo-v2.5-free",
+    "deepseek-3.2",
+    "mistral-large",
+]
 
 class AbduGeminiEngine:
     def __init__(self):
         self.semaphore = asyncio.Semaphore(1)
         self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://router.bynara.id/v1")
         self.api_key = Config.OPENROUTER_KEY
-        logger.info("✅ AbduGemini Engine initialized — NaraRouter + Identity Shield active.")
+        logger.info("✅ AbduGemini Engine initialized — NaraRouter + Fallback Chain + Identity Shield active.")
+
+    def _make_request(self, prompt: str, model: str) -> str:
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 800
+            },
+            timeout=45
+        )
+        return response.json()["choices"][0]["message"]["content"]
 
     async def _call_ai(self, prompt: str) -> str:
         async with self.semaphore:
-            try:
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(None, lambda: requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "mimo-v2.5-free",
-                        "messages": [
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": prompt}
-                        ],
-                        "max_tokens": 500
-                    },
-                    timeout=45
-                ))
-                return response.json()["choices"][0]["message"]["content"]
-            except Exception as e:
-                logger.error(f"AI error: {e}")
-                return f"❌ خطأ: {str(e)}"
+            loop = asyncio.get_event_loop()
+            for model in MODELS_FALLBACK:
+                try:
+                    logger.info(f"🤖 Trying model: {model}")
+                    result = await loop.run_in_executor(None, lambda m=model: self._make_request(prompt, m))
+                    logger.info(f"✅ Success with model: {model}")
+                    return result
+                except Exception as e:
+                    logger.warning(f"⚠️ Model {model} failed: {e} — trying next...")
+                    continue
+            return "❌ كل المحركات مشغولة حالياً، حاول بعد قليل."
 
     async def chat_response(self, text: str) -> str:
         return await self._call_ai(text)
@@ -268,7 +282,7 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *ABDUGEMINIBOT | ABDellah VENTURES LLC*\n\n✅ النظام متصل بنجاح.\nالمحرك شغال ومهمتنا واحدة: *نجمعو الدار* 💰\n\nإرسل `/help` لعرض قائمة الأوامر.",
+        "🤖 *ABDUGEMINIBOT | ABDellah VENTURES LLC*\n\n✅ النظام متصل بنجاح.\nالمحرك شغال ومهمتنا واحدة: *نجمعو الدولار* 💵\n\nإرسل `/help` لعرض قائمة الأوامر.",
         parse_mode="Markdown"
     )
 
