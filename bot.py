@@ -4,11 +4,12 @@ import sys
 import json
 import logging
 import asyncio
-import requests
 import functools
 from datetime import datetime
 import aiohttp
 import gspread
+import google.generativeai as genai
+from google.api_core.exceptions import TooManyRequests
 from google.oauth2.service_account import Credentials
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -19,7 +20,7 @@ logger = logging.getLogger("AbduGeminiBot")
 class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-    OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
     GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
     GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
@@ -61,48 +62,54 @@ def authorization_check(func):
 
 class AbduGeminiEngine:
     def __init__(self):
+        self.api_key = Config.GEMINI_API_KEY
+        genai.configure(api_key=self.api_key)
+        self.system_instruction = (
+            "You are AbduGeminiBot, an authentic, adaptive, and elite AI collaborator built "
+            "exclusively for Abdellah Ventures LLC, working directly under the guidance of the founder Ehab. "
+            "CRITICAL: You are NOT 'MiMo', you are NOT from Xiaomi, and you are NOT a generic support bot. "
+            "Never apologize needlessly, never break character, and never output corporate filler. "
+            "Always speak with deep context, absolute clarity, and tactical insight. "
+            "Match the user's language (Arabic/English) instantly with a high-energy, helpful peer voice."
+        )
+        self.model = genai.GenerativeModel(
+            model_name="gemini-2.0-flash",
+            system_instruction=self.system_instruction
+        )
         self.semaphore = asyncio.Semaphore(1)
-        self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        self.api_key = Config.OPENROUTER_KEY
-        logger.info("✅ AbduGemini Engine initialized successfully")
+        logger.info("✅ AbduGemini Engine connected with embedded Core Identity Shield.")
 
     async def _call_ai(self, prompt: str) -> str:
+        if not self.api_key:
+            return "⚠️ المحرك أوفلاين. تحقق من المتغيرات البيئية (GEMINI_API_KEY)."
         async with self.semaphore:
-            try:
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(None, lambda: requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "mimo-v2.5-free",
-                        "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 500
-                    },
-                    timeout=25
-                ))
-                return response.json()["choices"][0]["message"]["content"]
-            except Exception as e:
-                logger.error(f"AI error: {e}")
-                return f"❌ خطأ: {str(e)}"
+            for attempt in range(5):
+                try:
+                    response = await self.model.generate_content_async(prompt)
+                    return response.text
+                except TooManyRequests:
+                    wait = 2 ** attempt
+                    logger.warning(f"⏳ حد الطلبات ممتلئ، إعادة المحاولة بعد {wait} ثوانٍ (محاولة {attempt+1})")
+                    await asyncio.sleep(wait)
+                except Exception as e:
+                    logger.error(f"❌ خطأ في محرك Gemini: {e}")
+                    return f"❌ خطأ في النظام: {str(e)}"
+            return "⚠️ المحرك مشغول حالياً، يرجى المحاولة بعد قليل."
 
     async def chat_response(self, text: str) -> str:
-        system_prompt = "You are AbduGeminiBot, an adaptive and sharp AI assistant for Abdellah Ventures LLC. Be professional and helpful."
-        return await self._call_ai(f"{system_prompt}\nUser says: {text}")
+        return await self._call_ai(text)
 
     async def analyze_sentiment(self, text: str) -> dict:
-        prompt = f"Analyze sentiment and return JSON (sentiment, confidence, summary, recommended_action):\n\"{text}\""
+        prompt = f"Analyze sentiment and return a clean, executive JSON string (sentiment, confidence, summary, recommended_action) for this text:\n\"{text}\""
         response_text = await self._call_ai(prompt)
         return {"raw_response": response_text}
 
     async def process_command_intelligence(self, cmd: str, data: dict) -> str:
-        prompt = f"Provide 3-line tactical insight for operation '{cmd}' with data: {data}"
+        prompt = f"Provide a brief, high-impact tactical insight for the operation '{cmd}' using this data: {data}. Keep it under 3 punchy sentences."
         return await self._call_ai(prompt)
 
     async def generate_outreach_variant(self, niche: str, city: str) -> str:
-        prompt = f"Write direct B2B cold outreach for {niche} in {city}. Sender Ehab, Abdellah Ventures LLC. Max 100 words."
+        prompt = f"Write a direct, high-converting B2B cold outreach message for a {niche} business located in {city}. The sender is Ehab from Abdellah Ventures LLC. Focus on driving a 10-min discovery call. Max 100 words. No fluff."
         return await self._call_ai(prompt)
 
 ai_engine = AbduGeminiEngine()
@@ -257,7 +264,7 @@ campaign_engine = CampaignEngine()
 @authorization_check
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل بنجاح.\nالمحرك شغال بـ *NaraRouter* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة الأوامر.",
+        "🤖 *عبد الله تلغرام بوت | ABDUGEMINIBOT*\n\n✅ النظام متصل بنجاح.\nالمحرك شغال بـ *Gemini 2.0 Flash* وجاهز تماماً لخدمتك يا الزعيم.\n\nإرسل `/help` لعرض قائمة الأوامر.",
         parse_mode="Markdown"
     )
 
