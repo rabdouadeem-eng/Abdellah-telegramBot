@@ -7,7 +7,6 @@ import asyncio
 import requests
 import functools
 from datetime import datetime
-from openai import OpenAI
 import aiohttp
 import gspread
 from google.oauth2.service_account import Credentials
@@ -349,13 +348,15 @@ async def post_init(app: Application) -> None:
 
 def main() -> None:
     Config.validate()
-    app = Application.builder()\
-        .token(Config.TELEGRAM_BOT_TOKEN)\
-        .post_init(post_init)\
-        .connect_timeout(30)\
-        .read_timeout(30)\
-        .write_timeout(30)\
+    app = (
+        Application.builder()
+        .token(Config.TELEGRAM_BOT_TOKEN)
+        .post_init(post_init)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .write_timeout(30)
         .build()
+    )
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("scrape", scrape_command))
@@ -373,7 +374,7 @@ def main() -> None:
         )
     else:
         logger.info("🔄 Polling mode active")
-        app.run_polling()
+        app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
